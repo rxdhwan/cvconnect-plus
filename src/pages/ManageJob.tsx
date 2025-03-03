@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import MainLayout from "@/components/layout/MainLayout";
@@ -13,6 +14,7 @@ import { CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox";
 
 const ManageJob = () => {
   const [title, setTitle] = useState("");
@@ -31,6 +33,7 @@ const ManageJob = () => {
   const [loading, setLoading] = useState(true);
   const [company, setCompany] = useState(null);
   const [availableSkills, setAvailableSkills] = useState<string[]>([]);
+  const [selectedSkill, setSelectedSkill] = useState<string>("");
   const [date, setDate] = React.useState<Date | undefined>(new Date())
 
   const navigate = useNavigate();
@@ -61,17 +64,9 @@ const ManageJob = () => {
           return;
         }
 
-        // Fetch available skills
-        const { data: skillsData, error: skillsError } = await supabase
-          .from('skills')
-          .select('name');
-
-        if (skillsError) {
-          console.error("Error fetching skills:", skillsError);
-          toast.error("Failed to load skills");
-        } else {
-          setAvailableSkills(skillsData.map(skill => skill.name));
-        }
+        // Define some default skills since we can't query the skills table directly
+        const defaultSkills = ["JavaScript", "React", "TypeScript", "Node.js", "SQL", "CSS", "HTML", "Python", "Java", "Cloud"];
+        setAvailableSkills(defaultSkills);
         
         // Fetch company data
         const { data: companyData, error: companyError } = await supabase
@@ -161,7 +156,7 @@ const ManageJob = () => {
             description,
             requirements,
             location,
-            salary_range,
+            salary_range: salaryRange,
             type: jobType,
             remote,
             category,
@@ -180,6 +175,9 @@ const ManageJob = () => {
           navigate('/dashboard');
         }
       } else {
+        // Get the current user's ID
+        const { data: { user } } = await supabase.auth.getUser();
+        
         // Create new job
         const { data, error } = await supabase
           .from('jobs')
@@ -189,7 +187,7 @@ const ManageJob = () => {
               description,
               requirements,
               location,
-              salary_range,
+              salary_range: salaryRange,
               type: jobType,
               remote,
               category,
@@ -197,7 +195,7 @@ const ManageJob = () => {
               company_id: companyId,
               status,
               expires_at: expiresAt.toISOString(),
-              created_by: supabase.auth.currentUser?.id,
+              created_by: user?.id,
             },
           ]);
         
@@ -215,6 +213,17 @@ const ManageJob = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSkillSelect = (value: string) => {
+    if (value && !skills.includes(value)) {
+      setSkills([...skills, value]);
+    }
+    setSelectedSkill("");
+  };
+
+  const handleRemoveSkill = (skill: string) => {
+    setSkills(skills.filter(s => s !== skill));
   };
 
   if (loading) {
@@ -314,11 +323,10 @@ const ManageJob = () => {
           </div>
           
           <div className="mb-4 flex items-center space-x-2">
-            <Input
-              type="checkbox"
+            <Checkbox
               id="remote"
               checked={remote}
-              onChange={(e) => setRemote(e.target.checked)}
+              onCheckedChange={(checked) => setRemote(checked as boolean)}
             />
             <Label htmlFor="remote">Remote</Label>
           </div>
@@ -336,16 +344,7 @@ const ManageJob = () => {
           
           <div className="mb-4">
             <Label htmlFor="skills">Skills</Label>
-            <Select
-              onValueChange={(value) => {
-                if (skills.includes(value)) {
-                  setSkills(skills.filter((s) => s !== value));
-                } else {
-                  setSkills([...skills, value]);
-                }
-              }}
-              multiple
-            >
+            <Select value={selectedSkill} onValueChange={handleSkillSelect}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Select skills" />
               </SelectTrigger>
@@ -357,8 +356,19 @@ const ManageJob = () => {
                 ))}
               </SelectContent>
             </Select>
-            <div className="mt-2">
-              Selected skills: {skills.join(", ")}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {skills.map((skill) => (
+                <Badge key={skill} className="px-3 py-1">
+                  {skill}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveSkill(skill)}
+                    className="ml-2 hover:text-red-500"
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ))}
             </div>
           </div>
           

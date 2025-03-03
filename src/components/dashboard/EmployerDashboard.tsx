@@ -72,11 +72,8 @@ const EmployerDashboard = () => {
           return;
         }
         
-        // Type assertion for profile data
-        const typedProfile = profile as any;
-        
         // Check if user has a company
-        if (!typedProfile.company_id) {
+        if (!profile.company_id) {
           setNeedsCompany(true);
           setLoading(false);
           return;
@@ -86,7 +83,7 @@ const EmployerDashboard = () => {
         const { data: company, error: companyError } = await supabase
           .from('companies')
           .select('*')
-          .eq('id', typedProfile.company_id)
+          .eq('id', profile.company_id)
           .single();
         
         if (companyError || !company) {
@@ -99,7 +96,7 @@ const EmployerDashboard = () => {
         const { data: jobs, error: jobsError } = await supabase
           .from('jobs')
           .select('*')
-          .eq('company_id', typedProfile.company_id)
+          .eq('company_id', profile.company_id)
           .order('created_at', { ascending: false });
         
         if (jobsError) {
@@ -115,7 +112,7 @@ const EmployerDashboard = () => {
             job:jobs(*),
             applicant:profiles(*)
           `)
-          .eq('job.company_id', typedProfile.company_id)
+          .eq('job.company_id', profile.company_id)
           .order('created_at', { ascending: false })
           .limit(5);
         
@@ -129,24 +126,24 @@ const EmployerDashboard = () => {
         let pendingApplications = 0;
         
         if (jobs) {
-          activeJobs = jobs.filter(job => (job as any).status === 'active').length;
+          activeJobs = jobs.filter(job => job.status === 'active').length;
           
           // Get all applications for company jobs
           const { data: allApplications, error: allAppsError } = await supabase
             .from('applications')
             .select('id, status, job_id')
-            .in('job_id', jobs.map(job => (job as any).id));
+            .in('job_id', jobs.map(job => job.id));
           
           if (!allAppsError && allApplications) {
             totalApplications = allApplications.length;
-            pendingApplications = allApplications.filter(app => (app as any).status === 'pending').length;
+            pendingApplications = allApplications.filter(app => app.status === 'pending').length;
           }
         }
         
         // Set all data to state
-        setCompany(company as any);
-        setJobs(jobs as any[] || []);
-        setRecentApplications(recentApplications as any[] || []);
+        setCompany(company);
+        setJobs(jobs || []);
+        setRecentApplicants(recentApplications || []);
         setStatistics({
           activeJobs,
           totalApplications,
