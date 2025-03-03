@@ -5,7 +5,12 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Briefcase, User } from "lucide-react";
 
-const RoleSelection = () => {
+interface RoleSelectionProps {
+  onRoleSelect?: (role: "job-seeker" | "employer") => void;
+  onCancel?: () => void;
+}
+
+const RoleSelection = ({ onRoleSelect, onCancel }: RoleSelectionProps) => {
   const navigate = useNavigate();
   const [selectedRole, setSelectedRole] = useState<"job-seeker" | "employer" | null>(null);
 
@@ -19,9 +24,13 @@ const RoleSelection = () => {
       return;
     }
 
-    localStorage.setItem("userRole", selectedRole);
-    toast.success(`Welcome! You're now signed in as a ${selectedRole === "job-seeker" ? "Job Seeker" : "Employer"}`);
-    navigate("/dashboard");
+    if (onRoleSelect) {
+      onRoleSelect(selectedRole);
+    } else {
+      localStorage.setItem("userRole", selectedRole);
+      toast.success(`Welcome! You're now signed in as a ${selectedRole === "job-seeker" ? "Job Seeker" : "Employer"}`);
+      navigate("/dashboard");
+    }
   };
 
   return (
@@ -82,6 +91,16 @@ const RoleSelection = () => {
       >
         Continue
       </Button>
+      
+      {onCancel && (
+        <Button 
+          onClick={onCancel} 
+          variant="ghost" 
+          className="mt-4"
+        >
+          Cancel
+        </Button>
+      )}
     </div>
   );
 };

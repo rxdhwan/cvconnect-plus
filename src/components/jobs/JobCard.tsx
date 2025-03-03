@@ -1,281 +1,144 @@
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import React from "react";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Briefcase, 
-  MapPin, 
-  Clock, 
-  DollarSign, 
-  Users, 
-  Heart,
-  Bitcoin
-} from "lucide-react";
-import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Briefcase, MapPin, DollarSign, Users, Star, Calendar, ExternalLink, BookmarkPlus } from "lucide-react";
 
-interface JobCardProps {
-  job: {
-    id: number;
-    title: string;
-    company: string;
-    logo: string;
-    location: string;
-    salary: string;
-    type: string;
-    posted: string;
-    applicants: number;
-    description: string;
-    tags: string[];
-    matchScore?: number;
-  };
-  compact?: boolean;
+export interface JobCardProps {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  salary: string;
+  tags: string[];
+  applications: number;
+  posted: string;
+  description: string;
+  aiScore: number;
+  onApply: () => void;
+  onSave: () => void;
 }
 
-// Custom Ethereum icon component
 const EthereumIcon = () => (
   <svg 
-    width="16" 
-    height="16" 
-    viewBox="0 0 256 417" 
-    xmlns="http://www.w3.org/2000/svg"
-    className="text-crypto-ethereum"
-    style={{ fill: 'currentColor' }}
+    xmlns="http://www.w3.org/2000/svg" 
+    width="24" 
+    height="24" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round"
+    className="lucide lucide-bitcoin"
   >
-    <path d="M127.9611 0.0368728L125.1661 9.5877V285.168L127.9611 288.002L255.9231 212.176L127.9611 0.0368728Z" />
-    <path d="M127.962 0.0368728L0 212.176L127.962 288.002V154.258V0.0368728Z" />
-    <path d="M127.9609 312.1866L126.3859 314.1056V413.3056L127.9609 416.9066L255.9999 236.5866L127.9609 312.1866Z" />
-    <path d="M127.962 416.9052V312.1852L0 236.5852L127.962 416.9052Z" />
-    <path d="M127.9609 288.0012L255.9229 212.1762L127.9609 154.2592V288.0012Z" />
-    <path d="M0.000976562 212.176L127.963 288.001V154.259L0.000976562 212.176Z" />
+    <path d="M11.944 17.97L4.58 13.62 11.943 24 19.218 13.62l-7.274 4.35zm.056-24L4.7 12.4l7.3 4.362 7.3-4.362L12 0z" />
   </svg>
 );
 
-const SolanaIcon = () => (
-  <svg 
-    width="16" 
-    height="16" 
-    viewBox="0 0 32 32" 
-    xmlns="http://www.w3.org/2000/svg"
-    className="fill-crypto-solana"
-  >
-    <path d="M26.92 10.28a1.33 1.33 0 00-.8-.8l-7.99-3.03L4.97 19.95a1.33 1.33 0 000 1.87l3.43 3.43c.49.49 1.26.52 1.8.08L26.92 10.28zm-6.5 14.29l-4.1 4.1c-.5.5-1.38.5-1.87 0l-9.8-9.8a1.33 1.33 0 01-.08-1.76L18.43 3.2l7.68 2.9a1.32 1.32 0 01.8.8l.02 16.83a1.33 1.33 0 01-.39.94l-6.13 6.13v-.25z"/>
-  </svg>
-);
-
-const getCryptoIcon = (tag: string) => {
+const getTagIcon = (tag: string) => {
   const lowerTag = tag.toLowerCase();
-  if (lowerTag.includes("bitcoin")) return <Bitcoin size={16} className="text-crypto-bitcoin" />;
   if (lowerTag.includes("ethereum")) return <EthereumIcon />;
-  if (lowerTag.includes("solana")) return <SolanaIcon />;
+  if (lowerTag.includes("bitcoin")) return <Briefcase />;
+  if (lowerTag.includes("solana")) return <Star />;
   return null;
 };
 
-const getMatchScoreColor = (score?: number) => {
-  if (!score) return "";
-  if (score >= 90) return "text-green-500";
-  if (score >= 70) return "text-yellow-500";
-  return "text-red-500";
-};
-
-const JobCard = ({ job, compact = false }: JobCardProps) => {
-  const [saved, setSaved] = useState(false);
-
-  const handleSave = () => {
-    setSaved(!saved);
-    if (!saved) {
-      toast.success("Job saved to favorites");
-    } else {
-      toast.success("Job removed from favorites");
-    }
-  };
-
-  const handleApply = () => {
-    toast.success("Application submitted successfully");
-  };
-
-  if (compact) {
-    return (
-      <div className="p-4 rounded-lg border border-border/50 hover:border-border transition-all hover:bg-background/50 glass-card animate-hover">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-md overflow-hidden flex-shrink-0">
-            <img 
-              src={job.logo} 
-              alt={job.company} 
-              className="w-full h-full object-cover" 
-            />
-          </div>
-          <div>
-            <h3 className="font-medium line-clamp-1">{job.title}</h3>
-            <p className="text-sm text-muted-foreground">{job.company}</p>
-          </div>
-        </div>
-        
-        <div className="flex flex-wrap gap-2 mt-3">
-          <Badge variant="outline" className="text-xs flex items-center gap-1 bg-background/80">
-            <MapPin size={12} />
-            {job.location}
-          </Badge>
-          <Badge variant="outline" className="text-xs flex items-center gap-1 bg-background/80">
-            <DollarSign size={12} />
-            {job.salary}
-          </Badge>
-        </div>
-        
-        <div className="flex items-center justify-between mt-3">
-          <div className="flex gap-1">
-            {job.tags.slice(0, 2).map((tag, index) => {
-              const icon = getCryptoIcon(tag);
-              if (!icon) return null;
-              
-              return (
-                <Badge 
-                  key={index} 
-                  variant="outline" 
-                  className="text-xs flex items-center gap-1"
-                >
-                  {icon}
-                  {tag}
-                </Badge>
-              );
-            })}
-          </div>
-          
-          {job.matchScore && (
-            <div className={`text-xs font-medium ${getMatchScoreColor(job.matchScore)}`}>
-              {job.matchScore}% match
-            </div>
-          )}
-        </div>
-        
-        <Button 
-          className="w-full mt-3 neo-button" 
-          size="sm"
-          onClick={handleApply}
-        >
-          Apply Now
-        </Button>
-      </div>
-    );
-  }
+const JobCard: React.FC<JobCardProps> = ({
+  id,
+  title,
+  company,
+  location,
+  salary,
+  tags,
+  applications,
+  posted,
+  description,
+  aiScore,
+  onApply,
+  onSave,
+}) => {
+  const scoreColor = 
+    aiScore >= 90 ? "bg-green-500" : 
+    aiScore >= 70 ? "bg-yellow-500" : 
+    "bg-red-500";
 
   return (
-    <div className="p-6 rounded-lg border border-border/50 hover:border-border transition-all hover:bg-background/50 glass-card animate-hover">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-md overflow-hidden flex-shrink-0">
-            <img 
-              src={job.logo} 
-              alt={job.company} 
-              className="w-full h-full object-cover" 
-            />
-          </div>
-          <div>
-            <h3 className="text-xl font-medium">{job.title}</h3>
-            <p className="text-muted-foreground">{job.company}</p>
-          </div>
-        </div>
-        
-        <button 
-          onClick={handleSave}
-          className={`p-2 rounded-full ${
-            saved ? "text-primary bg-primary/10" : "text-muted-foreground bg-muted/50 hover:bg-muted/80"
-          }`}
-        >
-          <Heart size={20} className={saved ? "fill-primary" : ""} />
-        </button>
-      </div>
-      
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-full bg-primary/10">
-            <MapPin size={16} className="text-primary" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Location</p>
-            <p className="text-sm font-medium">{job.location}</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-full bg-yellow-500/10">
-            <Clock size={16} className="text-yellow-500" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Job Type</p>
-            <p className="text-sm font-medium">{job.type}</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-full bg-green-500/10">
-            <DollarSign size={16} className="text-green-500" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Salary</p>
-            <p className="text-sm font-medium">{job.salary}</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-full bg-blue-500/10">
-            <Users size={16} className="text-blue-500" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Applicants</p>
-            <p className="text-sm font-medium">{job.applicants}</p>
-          </div>
-        </div>
-      </div>
-      
-      <div className="mt-6">
-        <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
-          {job.description}
-        </p>
-        
-        <div className="flex flex-wrap gap-2 mb-6">
-          {job.tags.map((tag, index) => (
-            <Badge 
-              key={index} 
-              variant="outline" 
-              className="flex items-center gap-1"
-            >
-              {getCryptoIcon(tag)}
-              {tag}
-            </Badge>
-          ))}
-        </div>
-        
-        <div className="flex items-center justify-between mt-4">
-          <div className="flex items-center gap-2">
-            <Briefcase size={14} className="text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Posted {job.posted}</span>
+    <Card className="overflow-hidden hover:shadow-md transition-shadow">
+      <CardContent className="p-0">
+        <div className="p-6">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="text-xl font-bold tracking-tight">{title}</h3>
+              <p className="text-muted-foreground">{company}</p>
+            </div>
+            
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex flex-col items-center">
+                    <div className={`h-12 w-12 rounded-full flex items-center justify-center text-white ${scoreColor}`}>
+                      <span className="font-bold">{aiScore}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground mt-1">Match</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>AI Match Score: {aiScore}%</p>
+                  <p className="text-xs text-muted-foreground">Based on your profile</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           
-          {job.matchScore && (
-            <div className={`text-sm font-medium ${getMatchScoreColor(job.matchScore)}`}>
-              {job.matchScore}% match
+          <div className="flex flex-wrap gap-2 mb-4">
+            {tags.map((tag) => (
+              <Badge key={tag} variant="secondary" className="flex items-center gap-1">
+                {getTagIcon(tag)}
+                {tag}
+              </Badge>
+            ))}
+          </div>
+          
+          <p className="text-muted-foreground mb-4 line-clamp-2">{description}</p>
+          
+          <div className="grid grid-cols-3 gap-2 text-sm text-muted-foreground mb-4">
+            <div className="flex items-center gap-1">
+              <MapPin className="h-4 w-4" />
+              <span>{location}</span>
             </div>
-          )}
+            <div className="flex items-center gap-1">
+              <DollarSign className="h-4 w-4" />
+              <span>{salary}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Calendar className="h-4 w-4" />
+              <span>{posted}</span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 text-sm">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span>{applications} applications</span>
+            <Progress value={Math.min(applications * 2, 100)} className="h-2 flex-1" />
+          </div>
         </div>
-        
-        <div className="flex gap-3 mt-4">
-          <Button 
-            variant="outline" 
-            className="flex-1 neo-button"
-            onClick={handleSave}
-          >
-            <Heart size={16} className={`mr-2 ${saved ? "fill-primary" : ""}`} />
-            {saved ? "Saved" : "Save"}
-          </Button>
-          <Button 
-            className="flex-[2] neo-button"
-            onClick={handleApply}
-          >
-            Apply Now
-          </Button>
-        </div>
-      </div>
-    </div>
+      </CardContent>
+      
+      <CardFooter className="flex justify-between items-center p-4 bg-muted/20 border-t">
+        <Button variant="outline" size="sm" onClick={onSave} className="gap-1">
+          <BookmarkPlus className="h-4 w-4" />
+          Save
+        </Button>
+        <Button onClick={onApply} className="gap-1">
+          <ExternalLink className="h-4 w-4" />
+          Apply Now
+        </Button>
+      </CardFooter>
+    </Card>
   );
 };
 
