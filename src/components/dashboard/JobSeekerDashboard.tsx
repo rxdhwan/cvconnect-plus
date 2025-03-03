@@ -53,81 +53,99 @@ const JobSeekerDashboard = () => {
   }, []);
   
   const fetchUserData = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (session) {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-        
-      if (profile && !error) {
-        const firstName = profile.first_name || '';
-        setUserName(firstName);
-        
-        // Calculate profile completion
-        let completionScore = 0;
-        const totalFields = 6; // Example: name, bio, skills, experience, education, resume
-        
-        if (profile.first_name) completionScore++;
-        if (profile.last_name) completionScore++;
-        if (profile.bio) completionScore++;
-        if (profile.skills && profile.skills.length > 0) completionScore++;
-        if (profile.experience && profile.experience.length > 0) completionScore++;
-        if (profile.resume_url) completionScore++;
-        
-        setProfileCompletion(Math.round((completionScore / totalFields) * 100));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // Get user profile data
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+          
+        if (data && !error) {
+          // Set user name from profile
+          const firstName = data.first_name || '';
+          setUserName(firstName);
+          
+          // Calculate profile completion
+          let completionScore = 0;
+          const totalFields = 6; // Example: name, bio, skills, experience, education, resume
+          
+          if (data.first_name) completionScore++;
+          if (data.last_name) completionScore++;
+          if (data.bio) completionScore++;
+          if (data.skills && data.skills.length > 0) completionScore++;
+          if (data.experience && data.experience.length > 0) completionScore++;
+          if (data.resume_url) completionScore++;
+          
+          setProfileCompletion(Math.round((completionScore / totalFields) * 100));
+        }
       }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
   
   const fetchApplications = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (session) {
-      const { data, error } = await supabase
-        .from('applications')
-        .select(`
-          *,
-          jobs:job_id (
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // Get user's applications
+        const { data, error } = await supabase
+          .from('applications')
+          .select(`
             *,
-            companies:company_id (*)
-          )
-        `)
-        .eq('applicant_id', session.user.id)
-        .order('created_at', { ascending: false });
-        
-      if (data && !error) {
-        setApplications(data || []);
-        
-        // Calculate application stats
-        const stats = {
-          total: data.length,
-          pending: data.filter(app => app.status === 'Pending').length,
-          interviews: data.filter(app => app.status === 'Interview').length,
-          rejected: data.filter(app => app.status === 'Rejected').length,
-          accepted: data.filter(app => app.status === 'Accepted').length,
-        };
-        
-        setApplicationStats(stats);
+            jobs:job_id (
+              *,
+              companies:company_id (*)
+            )
+          `)
+          .eq('applicant_id', session.user.id)
+          .order('created_at', { ascending: false });
+          
+        if (!error) {
+          setApplications(data || []);
+          
+          // Calculate application stats
+          const stats = {
+            total: data.length,
+            pending: data.filter(app => app.status === 'New' || app.status === 'Pending').length,
+            interviews: data.filter(app => app.status === 'Interview').length,
+            rejected: data.filter(app => app.status === 'Rejected').length,
+            accepted: data.filter(app => app.status === 'Hired').length,
+          };
+          
+          setApplicationStats(stats);
+        }
       }
+    } catch (error) {
+      console.error("Error fetching applications:", error);
     }
   };
   
   const fetchRecommendedJobs = async () => {
-    const { data, error } = await supabase
-      .from('jobs')
-      .select(`
-        *,
-        companies:company_id (*)
-      `)
-      .limit(2);
-      
-    if (data && !error) {
-      setRecommendedJobs(data);
+    try {
+      // Get recently posted jobs as recommendations (in a real app, this would use more sophisticated matching)
+      const { data, error } = await supabase
+        .from('jobs')
+        .select(`
+          *,
+          companies:company_id (*)
+        `)
+        .eq('status', 'Active')
+        .order('created_at', { ascending: false })
+        .limit(2);
+        
+      if (!error) {
+        setRecommendedJobs(data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching recommended jobs:", error);
     }
   };
 
@@ -153,12 +171,14 @@ const JobSeekerDashboard = () => {
 
   const renderStatusIcon = (status) => {
     switch (status) {
+      case 'New':
       case 'Pending':
         return <Clock size={14} className="text-yellow-500" />;
       case 'Interview':
         return <BarChart3 size={14} className="text-blue-500" />;
       case 'Rejected':
         return <XCircle size={14} className="text-red-500" />;
+      case 'Hired':
       case 'Accepted':
         return <CheckCircle size={14} className="text-green-500" />;
       default:
@@ -168,12 +188,14 @@ const JobSeekerDashboard = () => {
   
   const getStatusColor = (status) => {
     switch (status) {
+      case 'New':
       case 'Pending':
         return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
       case 'Interview':
         return "bg-blue-500/10 text-blue-500 border-blue-500/20";
       case 'Rejected':
         return "bg-red-500/10 text-red-500 border-red-500/20";
+      case 'Hired':
       case 'Accepted':
         return "bg-green-500/10 text-green-500 border-green-500/20";
       default:
@@ -331,7 +353,7 @@ const JobSeekerDashboard = () => {
                           size="icon" 
                           variant="ghost" 
                           className="h-8 w-8"
-                          onClick={() => navigate(`/job/${application.job_id}`)}
+                          onClick={() => navigate(`/application/${application.id}`)}
                         >
                           <ChevronRight size={16} />
                         </Button>

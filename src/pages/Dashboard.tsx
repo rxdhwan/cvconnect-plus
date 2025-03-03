@@ -25,29 +25,24 @@ const Dashboard = () => {
         return;
       }
       
-      // Get user role from localStorage or fallback to fetching from database
-      let storedRole = localStorage.getItem("userRole") as "job-seeker" | "employer" | null;
-      
-      if (!storedRole) {
-        // If role not in localStorage, try to fetch from profiles table
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single();
+      // Get user role from profile
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
           
-        if (profile && !error) {
-          storedRole = profile.role as "job-seeker" | "employer";
-          localStorage.setItem("userRole", storedRole);
-        } else {
-          // If we still don't have a role, redirect to role selection
-          toast.error("Please select your role");
-          navigate('/');
-          return;
-        }
+      if (profile && !error) {
+        const userRole = profile.role as "job-seeker" | "employer";
+        setUserRole(userRole);
+        localStorage.setItem("userRole", userRole);
+      } else {
+        // If we still don't have a role, redirect to role selection
+        toast.error("Please select your role");
+        navigate('/');
+        return;
       }
       
-      setUserRole(storedRole);
       setLoading(false);
     };
     

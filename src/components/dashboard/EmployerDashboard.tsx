@@ -53,14 +53,14 @@ const EmployerDashboard = () => {
       
       if (session) {
         // Get company ID from profile
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile } = await supabase
           .from('profiles')
           .select('company_id')
           .eq('id', session.user.id)
           .single();
           
-        if (profileError || !profile?.company_id) {
-          console.error("Error fetching profile or no company ID:", profileError);
+        if (!profile?.company_id) {
+          // Employer doesn't have a company yet
           setLoading(false);
           return;
         }
@@ -68,19 +68,17 @@ const EmployerDashboard = () => {
         const companyId = profile.company_id;
         
         // Fetch active jobs
-        const { data: jobs, error: jobsError } = await supabase
+        const { data: jobs } = await supabase
           .from('jobs')
           .select('*')
           .eq('company_id', companyId)
           .eq('status', 'Active')
           .order('created_at', { ascending: false });
           
-        if (!jobsError) {
-          setActiveJobs(jobs || []);
-        }
+        setActiveJobs(jobs || []);
         
         // Fetch recent applicants
-        const { data: applicants, error: applicantsError } = await supabase
+        const { data: applicants } = await supabase
           .from('applications')
           .select(`
             *,
@@ -91,42 +89,38 @@ const EmployerDashboard = () => {
           .order('created_at', { ascending: false })
           .limit(3);
           
-        if (!applicantsError) {
-          setRecentApplicants(applicants || []);
-        }
+        setRecentApplicants(applicants || []);
         
         // Calculate job stats
-        if (!jobsError && !applicantsError) {
-          // Count total applicants across all jobs
-          const { count: totalApplicants, error: countError } = await supabase
-            .from('applications')
-            .select('*', { count: 'exact', head: true })
-            .eq('company_id', companyId);
-            
-          // Count new applications (received in last 7 days)
-          const oneWeekAgo = new Date();
-          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        // Count total applicants across all jobs
+        const { count: totalApplicants } = await supabase
+          .from('applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('company_id', companyId);
           
-          const { count: newApplications, error: newAppError } = await supabase
-            .from('applications')
-            .select('*', { count: 'exact', head: true })
-            .eq('company_id', companyId)
-            .gte('created_at', oneWeekAgo.toISOString());
-            
-          // Count interviews scheduled
-          const { count: interviewsScheduled, error: interviewsError } = await supabase
-            .from('applications')
-            .select('*', { count: 'exact', head: true })
-            .eq('company_id', companyId)
-            .eq('status', 'Interview');
-            
-          setJobStats({
-            activeJobs: jobs?.length || 0,
-            totalApplicants: totalApplicants || 0,
-            newApplications: newApplications || 0,
-            interviewsScheduled: interviewsScheduled || 0,
-          });
-        }
+        // Count new applications (received in last 7 days)
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        
+        const { count: newApplications } = await supabase
+          .from('applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('company_id', companyId)
+          .gte('created_at', oneWeekAgo.toISOString());
+          
+        // Count interviews scheduled
+        const { count: interviewsScheduled } = await supabase
+          .from('applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('company_id', companyId)
+          .eq('status', 'Interview');
+          
+        setJobStats({
+          activeJobs: jobs?.length || 0,
+          totalApplicants: totalApplicants || 0,
+          newApplications: newApplications || 0,
+          interviewsScheduled: interviewsScheduled || 0,
+        });
       }
     } catch (error) {
       console.error("Error fetching employer data:", error);
@@ -407,10 +401,10 @@ const EmployerDashboard = () => {
                       <div className="flex justify-between items-center mt-3">
                         <Badge 
                           variant="outline" 
-                          className={`flex items-center gap-1 ${getStatusColor(applicant.status)}`}
+                          className={getStatusColor(applicant.status)}
                         >
                           {renderStatusIcon(applicant.status)}
-                          {applicant.status}
+                          <span className="ml-1">{applicant.status}</span>
                         </Badge>
                         
                         <div className={`text-xs font-medium flex items-center gap-1 ${getMatchScoreColor(applicant.match_score || 75)}`}>
