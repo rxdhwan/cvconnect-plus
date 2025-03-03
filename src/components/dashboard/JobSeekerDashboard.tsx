@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Card, 
   CardContent, 
@@ -21,114 +22,178 @@ import {
   ArrowUpRight,
   User
 } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import Hints from "../onboarding/Hints";
 
-// Mock data for dashboard
-const applicationStats = {
-  total: 12,
-  pending: 5,
-  interviews: 3,
-  rejected: 2,
-  accepted: 2,
-};
-
-const recentApplications = [
-  {
-    id: 1,
-    company: "BlockChain Inc",
-    role: "Senior Solana Developer",
-    status: "Pending",
-    logo: "https://images.unsplash.com/photo-1621416894569-0f39ed31d247?auto=format&fit=crop&q=80&w=100&h=100",
-    appliedDate: "2023-11-15",
-    matchScore: 92,
-  },
-  {
-    id: 2,
-    company: "CryptoFuture",
-    role: "Ethereum Smart Contract Engineer",
-    status: "Interview",
-    logo: "https://images.unsplash.com/photo-1622630998477-20aa696ecb05?auto=format&fit=crop&q=80&w=100&h=100",
-    appliedDate: "2023-11-10",
-    matchScore: 87,
-  },
-  {
-    id: 3,
-    company: "Dapps Innovation",
-    role: "Frontend Developer (Web3)",
-    status: "Rejected",
-    logo: "https://images.unsplash.com/photo-1639762681057-408e52192e55?auto=format&fit=crop&q=80&w=100&h=100",
-    appliedDate: "2023-11-05",
-    matchScore: 65,
-  },
-];
-
-const recommendedJobs = [
-  {
-    id: 1,
-    company: "Solana Foundation",
-    role: "Rust Developer",
-    logo: "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&q=80&w=100&h=100",
-    location: "Remote",
-    salary: "$120k - $160k",
-    posted: "2 days ago",
-    matchScore: 95,
-  },
-  {
-    id: 2,
-    company: "Ethereum Labs",
-    role: "Blockchain Security Engineer",
-    logo: "https://images.unsplash.com/photo-1639762681447-76e57dc0d399?auto=format&fit=crop&q=80&w=100&h=100",
-    location: "New York, USA",
-    salary: "$140k - $180k",
-    posted: "1 week ago",
-    matchScore: 88,
-  },
-];
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case "Pending":
-      return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
-    case "Interview":
-      return "bg-blue-500/10 text-blue-500 border-blue-500/20";
-    case "Rejected":
-      return "bg-red-500/10 text-red-500 border-red-500/20";
-    case "Accepted":
-      return "bg-green-500/10 text-green-500 border-green-500/20";
-    default:
-      return "bg-gray-500/10 text-gray-500 border-gray-500/20";
-  }
-};
-
-const getMatchScoreColor = (score: number) => {
-  if (score >= 90) return "text-green-500";
-  if (score >= 70) return "text-yellow-500";
-  return "text-red-500";
-};
-
 const JobSeekerDashboard = () => {
+  const navigate = useNavigate();
   const [showHints, setShowHints] = useState(false);
+  const [applications, setApplications] = useState([]);
+  const [recommendedJobs, setRecommendedJobs] = useState([]);
+  const [applicationStats, setApplicationStats] = useState({
+    total: 0,
+    pending: 0,
+    interviews: 0,
+    rejected: 0,
+    accepted: 0,
+  });
+  const [profileCompletion, setProfileCompletion] = useState(0);
+  const [userName, setUserName] = useState("");
+  const [loading, setLoading] = useState(true);
   
   useEffect(() => {
     // Check if hints were already shown
     const hintsShown = localStorage.getItem("hintsShown");
     setShowHints(!hintsShown);
+    
+    fetchUserData();
+    fetchApplications();
+    fetchRecommendedJobs();
   }, []);
+  
+  const fetchUserData = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session) {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+        
+      if (profile && !error) {
+        const firstName = profile.first_name || '';
+        setUserName(firstName);
+        
+        // Calculate profile completion
+        let completionScore = 0;
+        const totalFields = 6; // Example: name, bio, skills, experience, education, resume
+        
+        if (profile.first_name) completionScore++;
+        if (profile.last_name) completionScore++;
+        if (profile.bio) completionScore++;
+        if (profile.skills && profile.skills.length > 0) completionScore++;
+        if (profile.experience && profile.experience.length > 0) completionScore++;
+        if (profile.resume_url) completionScore++;
+        
+        setProfileCompletion(Math.round((completionScore / totalFields) * 100));
+      }
+    }
+    
+    setLoading(false);
+  };
+  
+  const fetchApplications = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session) {
+      const { data, error } = await supabase
+        .from('applications')
+        .select(`
+          *,
+          jobs:job_id (
+            *,
+            companies:company_id (*)
+          )
+        `)
+        .eq('applicant_id', session.user.id)
+        .order('created_at', { ascending: false });
+        
+      if (data && !error) {
+        setApplications(data || []);
+        
+        // Calculate application stats
+        const stats = {
+          total: data.length,
+          pending: data.filter(app => app.status === 'Pending').length,
+          interviews: data.filter(app => app.status === 'Interview').length,
+          rejected: data.filter(app => app.status === 'Rejected').length,
+          accepted: data.filter(app => app.status === 'Accepted').length,
+        };
+        
+        setApplicationStats(stats);
+      }
+    }
+  };
+  
+  const fetchRecommendedJobs = async () => {
+    const { data, error } = await supabase
+      .from('jobs')
+      .select(`
+        *,
+        companies:company_id (*)
+      `)
+      .limit(2);
+      
+    if (data && !error) {
+      setRecommendedJobs(data);
+    }
+  };
 
-  const renderStatusIcon = (status: string) => {
+  const handleApplyNow = (jobId) => {
+    navigate(`/job/${jobId}`);
+  };
+  
+  const handleUploadCV = () => {
+    navigate('/profile', { state: { tab: 'resume' } });
+  };
+  
+  const handleEditProfile = () => {
+    navigate('/profile', { state: { tab: 'profile' } });
+  };
+  
+  const handleViewAllApplications = () => {
+    navigate('/applications');
+  };
+  
+  const handleViewAllJobs = () => {
+    navigate('/jobs');
+  };
+
+  const renderStatusIcon = (status) => {
     switch (status) {
-      case "Pending":
+      case 'Pending':
         return <Clock size={14} className="text-yellow-500" />;
-      case "Interview":
+      case 'Interview':
         return <BarChart3 size={14} className="text-blue-500" />;
-      case "Rejected":
+      case 'Rejected':
         return <XCircle size={14} className="text-red-500" />;
-      case "Accepted":
+      case 'Accepted':
         return <CheckCircle size={14} className="text-green-500" />;
       default:
         return null;
     }
   };
+  
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Pending':
+        return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
+      case 'Interview':
+        return "bg-blue-500/10 text-blue-500 border-blue-500/20";
+      case 'Rejected':
+        return "bg-red-500/10 text-red-500 border-red-500/20";
+      case 'Accepted':
+        return "bg-green-500/10 text-green-500 border-green-500/20";
+      default:
+        return "bg-gray-500/10 text-gray-500 border-gray-500/20";
+    }
+  };
+  
+  const getMatchScoreColor = (score) => {
+    if (score >= 90) return "text-green-500";
+    if (score >= 70) return "text-yellow-500";
+    return "text-red-500";
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
@@ -136,7 +201,7 @@ const JobSeekerDashboard = () => {
       
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2 tracking-tight">
-          Good morning, Alex
+          {userName ? `Good day, ${userName}` : 'Welcome back'}
         </h1>
         <p className="text-muted-foreground">
           Here's an overview of your job applications and recommendations
@@ -192,9 +257,9 @@ const JobSeekerDashboard = () => {
               <div>
                 <p className="text-muted-foreground text-sm">Profile Completion</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <p className="text-xl font-bold">75%</p>
+                  <p className="text-xl font-bold">{profileCompletion}%</p>
                   <div className="w-24">
-                    <Progress value={75} className="h-2" />
+                    <Progress value={profileCompletion} className="h-2" />
                   </div>
                 </div>
               </div>
@@ -212,7 +277,7 @@ const JobSeekerDashboard = () => {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle>Recent Applications</CardTitle>
-                <Button variant="ghost" size="sm" className="text-xs">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={handleViewAllApplications}>
                   View All <ChevronRight size={14} className="ml-1" />
                 </Button>
               </div>
@@ -222,47 +287,68 @@ const JobSeekerDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recentApplications.map((application) => (
-                  <div 
-                    key={application.id}
-                    className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:border-border transition-all hover:bg-background/50 animate-hover"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-md overflow-hidden flex-shrink-0">
-                        <img 
-                          src={application.logo} 
-                          alt={application.company} 
-                          className="w-full h-full object-cover" 
-                        />
-                      </div>
-                      <div>
-                        <h4 className="font-medium">{application.role}</h4>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span>{application.company}</span>
-                          <span className="text-xs">•</span>
-                          <span>Applied {new Date(application.appliedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                {applications.length > 0 ? (
+                  applications.slice(0, 3).map((application) => (
+                    <div 
+                      key={application.id}
+                      className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:border-border transition-all hover:bg-background/50 animate-hover"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-md overflow-hidden flex-shrink-0 bg-muted flex items-center justify-center">
+                          {application.jobs?.companies?.logo_url ? (
+                            <img 
+                              src={application.jobs.companies.logo_url} 
+                              alt={application.jobs.companies.name} 
+                              className="w-full h-full object-cover" 
+                            />
+                          ) : (
+                            <Briefcase className="h-5 w-5" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="font-medium">{application.jobs?.title || "Job Title"}</h4>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span>{application.jobs?.companies?.name || "Company"}</span>
+                            <span className="text-xs">•</span>
+                            <span>Applied {new Date(application.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex flex-col items-end">
-                        <div className={`text-xs font-medium ${getMatchScoreColor(application.matchScore)}`}>
-                          {application.matchScore}% match
+                      <div className="flex items-center gap-4">
+                        <div className="flex flex-col items-end">
+                          <div className={`text-xs font-medium ${getMatchScoreColor(application.match_score || 70)}`}>
+                            {application.match_score || 70}% match
+                          </div>
+                          <Badge 
+                            variant="outline" 
+                            className={`mt-1 flex items-center gap-1 ${getStatusColor(application.status)}`}
+                          >
+                            {renderStatusIcon(application.status)}
+                            {application.status}
+                          </Badge>
                         </div>
-                        <Badge 
-                          variant="outline" 
-                          className={`mt-1 flex items-center gap-1 ${getStatusColor(application.status)}`}
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-8 w-8"
+                          onClick={() => navigate(`/job/${application.job_id}`)}
                         >
-                          {renderStatusIcon(application.status)}
-                          {application.status}
-                        </Badge>
+                          <ChevronRight size={16} />
+                        </Button>
                       </div>
-                      <Button size="icon" variant="ghost" className="h-8 w-8">
-                        <ChevronRight size={16} />
-                      </Button>
                     </div>
+                  ))
+                ) : (
+                  <div className="text-center p-6 text-muted-foreground">
+                    <p>You haven't applied to any jobs yet.</p>
+                    <Button 
+                      className="mt-4" 
+                      onClick={() => navigate('/jobs')}
+                    >
+                      Browse Jobs
+                    </Button>
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>
@@ -273,7 +359,7 @@ const JobSeekerDashboard = () => {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle>Top Matches</CardTitle>
-                <Button variant="ghost" size="sm" className="text-xs">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={handleViewAllJobs}>
                   View All <ChevronRight size={14} className="ml-1" />
                 </Button>
               </div>
@@ -283,61 +369,73 @@ const JobSeekerDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recommendedJobs.map((job) => (
-                  <div 
-                    key={job.id}
-                    className="p-3 rounded-lg border border-border/50 hover:border-border transition-all hover:bg-background/50 animate-hover"
-                  >
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-md overflow-hidden flex-shrink-0">
-                        <img 
-                          src={job.logo} 
-                          alt={job.company} 
-                          className="w-full h-full object-cover" 
-                        />
-                      </div>
-                      <div>
-                        <h4 className="font-medium">{job.role}</h4>
-                        <p className="text-sm text-muted-foreground">{job.company}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-between text-sm mb-3">
-                      <span className="text-muted-foreground">{job.location}</span>
-                      <span className="font-medium">{job.salary}</span>
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <Badge variant="secondary" className="text-xs">
-                        {job.posted}
-                      </Badge>
-                      <div className={`text-xs font-medium flex items-center gap-1 ${getMatchScoreColor(job.matchScore)}`}>
-                        <div className="w-14 h-1.5 rounded-full bg-muted overflow-hidden">
-                          <div 
-                            className={`h-full ${
-                              job.matchScore >= 90 ? "bg-green-500" : 
-                              job.matchScore >= 70 ? "bg-yellow-500" : "bg-red-500"
-                            }`}
-                            style={{ width: `${job.matchScore}%` }}
-                          />
-                        </div>
-                        <span>{job.matchScore}% match</span>
-                      </div>
-                    </div>
-
-                    <Button 
-                      className="w-full mt-3 neo-button" 
-                      size="sm"
+                {recommendedJobs.length > 0 ? (
+                  recommendedJobs.map((job) => (
+                    <div 
+                      key={job.id}
+                      className="p-3 rounded-lg border border-border/50 hover:border-border transition-all hover:bg-background/50 animate-hover"
                     >
-                      <span>Apply Now</span>
-                      <ArrowUpRight size={14} className="ml-1" />
-                    </Button>
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-md overflow-hidden flex-shrink-0 bg-muted flex items-center justify-center">
+                          {job.companies?.logo_url ? (
+                            <img 
+                              src={job.companies.logo_url} 
+                              alt={job.companies.name} 
+                              className="w-full h-full object-cover" 
+                            />
+                          ) : (
+                            <Briefcase className="h-5 w-5" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="font-medium">{job.title}</h4>
+                          <p className="text-sm text-muted-foreground">{job.companies?.name || "Company"}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-between text-sm mb-3">
+                        <span className="text-muted-foreground">{job.location || "Remote"}</span>
+                        <span className="font-medium">{job.salary_range || "Competitive"}</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <Badge variant="secondary" className="text-xs">
+                          {new Date(job.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </Badge>
+                        <div className={`text-xs font-medium flex items-center gap-1 ${getMatchScoreColor(job.match_score || 80)}`}>
+                          <div className="w-14 h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div 
+                              className={`h-full ${
+                                (job.match_score || 80) >= 90 ? "bg-green-500" : 
+                                (job.match_score || 80) >= 70 ? "bg-yellow-500" : "bg-red-500"
+                              }`}
+                              style={{ width: `${job.match_score || 80}%` }}
+                            />
+                          </div>
+                          <span>{job.match_score || 80}% match</span>
+                        </div>
+                      </div>
+
+                      <Button 
+                        className="w-full mt-3 neo-button" 
+                        size="sm"
+                        onClick={() => handleApplyNow(job.id)}
+                      >
+                        <span>Apply Now</span>
+                        <ArrowUpRight size={14} className="ml-1" />
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center p-4 text-muted-foreground">
+                    <p>No recommended jobs yet.</p>
                   </div>
-                ))}
+                )}
 
                 <Button 
                   variant="outline" 
-                  className="w-full neo-button" 
+                  className="w-full neo-button"
+                  onClick={handleViewAllJobs}
                 >
                   Browse More Jobs
                 </Button>
@@ -366,7 +464,7 @@ const JobSeekerDashboard = () => {
                   <p className="text-sm text-muted-foreground">Our AI will analyze your CV to match you with suitable jobs</p>
                 </div>
               </div>
-              <Button>Upload CV</Button>
+              <Button onClick={handleUploadCV}>Upload CV</Button>
             </div>
             
             <div className="flex items-center justify-between p-4 rounded-lg border border-border/50">
@@ -379,7 +477,7 @@ const JobSeekerDashboard = () => {
                   <p className="text-sm text-muted-foreground">Add skills, experience, and preferences to improve job matches</p>
                 </div>
               </div>
-              <Button variant="outline">Edit Profile</Button>
+              <Button variant="outline" onClick={handleEditProfile}>Edit Profile</Button>
             </div>
           </div>
         </CardContent>

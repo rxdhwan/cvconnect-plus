@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Card, 
   CardContent, 
@@ -21,124 +22,198 @@ import {
   ChevronRight,
   Plus
 } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import Hints from "../onboarding/Hints";
 
-// Mock data for dashboard
-const jobStats = {
-  activeJobs: 5,
-  totalApplicants: 87,
-  newApplications: 12,
-  interviewsScheduled: 8,
-};
-
-const activeJobs = [
-  {
-    id: 1,
-    title: "Senior Solana Developer",
-    applicants: 32,
-    views: 243,
-    posted: "2023-11-01",
-    expires: "2023-12-01",
-    status: "Active",
-  },
-  {
-    id: 2,
-    title: "Ethereum Smart Contract Engineer",
-    applicants: 24,
-    views: 187,
-    posted: "2023-11-05",
-    expires: "2023-12-05",
-    status: "Active",
-  },
-  {
-    id: 3,
-    title: "Frontend Developer (Web3)",
-    applicants: 18,
-    views: 156,
-    posted: "2023-11-10",
-    expires: "2023-12-10",
-    status: "Active",
-  },
-];
-
-const recentApplicants = [
-  {
-    id: 1,
-    name: "Sarah Johnson",
-    role: "Senior Solana Developer",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100&h=100",
-    appliedDate: "2023-11-15",
-    status: "New",
-    matchScore: 92,
-  },
-  {
-    id: 2,
-    name: "Michael Chen",
-    role: "Ethereum Smart Contract Engineer",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100&h=100",
-    appliedDate: "2023-11-14",
-    status: "Reviewed",
-    matchScore: 87,
-  },
-  {
-    id: 3,
-    name: "Alex Rodriguez",
-    role: "Frontend Developer (Web3)",
-    avatar: "https://images.unsplash.com/photo-1600486913747-55e5470d6f40?auto=format&fit=crop&q=80&w=100&h=100",
-    appliedDate: "2023-11-13",
-    status: "Interview",
-    matchScore: 78,
-  },
-];
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case "New":
-      return "bg-blue-500/10 text-blue-500 border-blue-500/20";
-    case "Reviewed":
-      return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
-    case "Interview":
-      return "bg-green-500/10 text-green-500 border-green-500/20";
-    case "Rejected":
-      return "bg-red-500/10 text-red-500 border-red-500/20";
-    case "Hired":
-      return "bg-purple-500/10 text-purple-500 border-purple-500/20";
-    default:
-      return "bg-gray-500/10 text-gray-500 border-gray-500/20";
-  }
-};
-
-const getMatchScoreColor = (score: number) => {
-  if (score >= 90) return "text-green-500";
-  if (score >= 70) return "text-yellow-500";
-  return "text-red-500";
-};
-
-const renderStatusIcon = (status: string) => {
-  switch (status) {
-    case "New":
-      return <Clock size={14} className="text-blue-500" />;
-    case "Reviewed":
-      return <Eye size={14} className="text-yellow-500" />;
-    case "Interview":
-      return <BarChart3 size={14} className="text-green-500" />;
-    case "Rejected":
-      return <XCircle size={14} className="text-red-500" />;
-    case "Hired":
-      return <CheckCircle size={14} className="text-purple-500" />;
-    default:
-      return null;
-  }
-};
-
 const EmployerDashboard = () => {
+  const navigate = useNavigate();
   const [showHints, setShowHints] = useState(false);
+  const [activeJobs, setActiveJobs] = useState([]);
+  const [recentApplicants, setRecentApplicants] = useState([]);
+  const [jobStats, setJobStats] = useState({
+    activeJobs: 0,
+    totalApplicants: 0,
+    newApplications: 0,
+    interviewsScheduled: 0,
+  });
+  const [loading, setLoading] = useState(true);
   
   useEffect(() => {
     // Check if hints were already shown
     const hintsShown = localStorage.getItem("hintsShown");
     setShowHints(!hintsShown);
+    
+    fetchCompanyData();
   }, []);
+  
+  const fetchCompanyData = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // Get company ID from profile
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('company_id')
+          .eq('id', session.user.id)
+          .single();
+          
+        if (profileError || !profile?.company_id) {
+          console.error("Error fetching profile or no company ID:", profileError);
+          setLoading(false);
+          return;
+        }
+        
+        const companyId = profile.company_id;
+        
+        // Fetch active jobs
+        const { data: jobs, error: jobsError } = await supabase
+          .from('jobs')
+          .select('*')
+          .eq('company_id', companyId)
+          .eq('status', 'Active')
+          .order('created_at', { ascending: false });
+          
+        if (!jobsError) {
+          setActiveJobs(jobs || []);
+        }
+        
+        // Fetch recent applicants
+        const { data: applicants, error: applicantsError } = await supabase
+          .from('applications')
+          .select(`
+            *,
+            jobs:job_id(*),
+            profiles:applicant_id(*)
+          `)
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: false })
+          .limit(3);
+          
+        if (!applicantsError) {
+          setRecentApplicants(applicants || []);
+        }
+        
+        // Calculate job stats
+        if (!jobsError && !applicantsError) {
+          // Count total applicants across all jobs
+          const { count: totalApplicants, error: countError } = await supabase
+            .from('applications')
+            .select('*', { count: 'exact', head: true })
+            .eq('company_id', companyId);
+            
+          // Count new applications (received in last 7 days)
+          const oneWeekAgo = new Date();
+          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+          
+          const { count: newApplications, error: newAppError } = await supabase
+            .from('applications')
+            .select('*', { count: 'exact', head: true })
+            .eq('company_id', companyId)
+            .gte('created_at', oneWeekAgo.toISOString());
+            
+          // Count interviews scheduled
+          const { count: interviewsScheduled, error: interviewsError } = await supabase
+            .from('applications')
+            .select('*', { count: 'exact', head: true })
+            .eq('company_id', companyId)
+            .eq('status', 'Interview');
+            
+          setJobStats({
+            activeJobs: jobs?.length || 0,
+            totalApplicants: totalApplicants || 0,
+            newApplications: newApplications || 0,
+            interviewsScheduled: interviewsScheduled || 0,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching employer data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePostNewJob = () => {
+    navigate('/post-job');
+  };
+  
+  const handleViewJobDetails = (jobId) => {
+    navigate(`/job/${jobId}/manage`);
+  };
+  
+  const handleViewAllJobs = () => {
+    navigate('/company/jobs');
+  };
+  
+  const handleViewAllApplicants = () => {
+    navigate('/company/applicants');
+  };
+  
+  const handleViewCv = (resumeUrl) => {
+    if (resumeUrl) {
+      window.open(resumeUrl, '_blank');
+    } else {
+      toast.error("CV not available");
+    }
+  };
+  
+  const handleReviewApplication = (applicationId) => {
+    navigate(`/application/${applicationId}`);
+  };
+  
+  const handleUpgradeToPremium = () => {
+    navigate('/pricing');
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "New":
+        return "bg-blue-500/10 text-blue-500 border-blue-500/20";
+      case "Reviewed":
+        return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
+      case "Interview":
+        return "bg-green-500/10 text-green-500 border-green-500/20";
+      case "Rejected":
+        return "bg-red-500/10 text-red-500 border-red-500/20";
+      case "Hired":
+        return "bg-purple-500/10 text-purple-500 border-purple-500/20";
+      default:
+        return "bg-gray-500/10 text-gray-500 border-gray-500/20";
+    }
+  };
+
+  const getMatchScoreColor = (score) => {
+    if (score >= 90) return "text-green-500";
+    if (score >= 70) return "text-yellow-500";
+    return "text-red-500";
+  };
+
+  const renderStatusIcon = (status) => {
+    switch (status) {
+      case "New":
+        return <Clock size={14} className="text-blue-500" />;
+      case "Reviewed":
+        return <Eye size={14} className="text-yellow-500" />;
+      case "Interview":
+        return <BarChart3 size={14} className="text-green-500" />;
+      case "Rejected":
+        return <XCircle size={14} className="text-red-500" />;
+      case "Hired":
+        return <CheckCircle size={14} className="text-purple-500" />;
+      default:
+        return null;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
@@ -217,7 +292,7 @@ const EmployerDashboard = () => {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle>Active Job Listings</CardTitle>
-                <Button variant="ghost" size="sm" className="text-xs">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={handleViewAllJobs}>
                   View All <ChevronRight size={14} className="ml-1" />
                 </Button>
               </div>
@@ -227,41 +302,57 @@ const EmployerDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {activeJobs.map((job) => (
-                  <div 
-                    key={job.id}
-                    className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:border-border transition-all hover:bg-background/50 animate-hover"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-2 rounded-full bg-primary/10">
-                        <Briefcase className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <h4 className="font-medium">{job.title}</h4>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span>Posted {new Date(job.posted).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                          <span className="text-xs">•</span>
-                          <span>Expires {new Date(job.expires).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                {activeJobs.length > 0 ? (
+                  activeJobs.map((job) => (
+                    <div 
+                      key={job.id}
+                      className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:border-border transition-all hover:bg-background/50 animate-hover"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="p-2 rounded-full bg-primary/10">
+                          <Briefcase className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium">{job.title}</h4>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span>Posted {new Date(job.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                            <span className="text-xs">•</span>
+                            <span>Expires {new Date(job.expires_at || new Date(job.created_at).setMonth(new Date(job.created_at).getMonth() + 1)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-6">
-                      <div className="flex flex-col items-center">
-                        <p className="text-lg font-medium">{job.applicants}</p>
-                        <p className="text-xs text-muted-foreground">Applicants</p>
+                      <div className="flex items-center gap-6">
+                        <div className="flex flex-col items-center">
+                          <p className="text-lg font-medium">{job.application_count || 0}</p>
+                          <p className="text-xs text-muted-foreground">Applicants</p>
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <p className="text-lg font-medium">{job.view_count || 0}</p>
+                          <p className="text-xs text-muted-foreground">Views</p>
+                        </div>
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-8 w-8"
+                          onClick={() => handleViewJobDetails(job.id)}
+                        >
+                          <ChevronRight size={16} />
+                        </Button>
                       </div>
-                      <div className="flex flex-col items-center">
-                        <p className="text-lg font-medium">{job.views}</p>
-                        <p className="text-xs text-muted-foreground">Views</p>
-                      </div>
-                      <Button size="icon" variant="ghost" className="h-8 w-8">
-                        <ChevronRight size={16} />
-                      </Button>
                     </div>
+                  ))
+                ) : (
+                  <div className="text-center p-6 text-muted-foreground">
+                    <p>You don't have any active job listings.</p>
+                    <p className="text-sm mt-2">Post a new job to start receiving applications.</p>
                   </div>
-                ))}
+                )}
                 
-                <Button className="w-full neo-button" variant="outline">
+                <Button 
+                  className="w-full neo-button" 
+                  variant="outline"
+                  onClick={handlePostNewJob}
+                >
                   <Plus size={16} className="mr-2" />
                   Post New Job
                 </Button>
@@ -275,7 +366,7 @@ const EmployerDashboard = () => {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle>Recent Applicants</CardTitle>
-                <Button variant="ghost" size="sm" className="text-xs">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={handleViewAllApplicants}>
                   View All <ChevronRight size={14} className="ml-1" />
                 </Button>
               </div>
@@ -285,56 +376,73 @@ const EmployerDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recentApplicants.map((applicant) => (
-                  <div 
-                    key={applicant.id}
-                    className="p-3 rounded-lg border border-border/50 hover:border-border transition-all hover:bg-background/50 animate-hover"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-                        <img 
-                          src={applicant.avatar} 
-                          alt={applicant.name} 
-                          className="w-full h-full object-cover" 
-                        />
+                {recentApplicants.length > 0 ? (
+                  recentApplicants.map((applicant) => (
+                    <div 
+                      key={applicant.id}
+                      className="p-3 rounded-lg border border-border/50 hover:border-border transition-all hover:bg-background/50 animate-hover"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-muted flex items-center justify-center">
+                          {applicant.profiles?.avatar_url ? (
+                            <img 
+                              src={applicant.profiles.avatar_url} 
+                              alt={`${applicant.profiles.first_name} ${applicant.profiles.last_name}`} 
+                              className="w-full h-full object-cover" 
+                            />
+                          ) : (
+                            <Users className="h-5 w-5" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="font-medium">
+                            {applicant.profiles?.first_name} {applicant.profiles?.last_name || ""}
+                          </h4>
+                          <p className="text-sm text-muted-foreground">
+                            Applied for {applicant.jobs?.title || "Job"}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-medium">{applicant.name}</h4>
-                        <p className="text-sm text-muted-foreground">Applied for {applicant.role}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-between items-center mt-3">
-                      <Badge 
-                        variant="outline" 
-                        className={`flex items-center gap-1 ${getStatusColor(applicant.status)}`}
-                      >
-                        {renderStatusIcon(applicant.status)}
-                        {applicant.status}
-                      </Badge>
                       
-                      <div className={`text-xs font-medium flex items-center gap-1 ${getMatchScoreColor(applicant.matchScore)}`}>
-                        <span>{applicant.matchScore}% match</span>
+                      <div className="flex justify-between items-center mt-3">
+                        <Badge 
+                          variant="outline" 
+                          className={`flex items-center gap-1 ${getStatusColor(applicant.status)}`}
+                        >
+                          {renderStatusIcon(applicant.status)}
+                          {applicant.status}
+                        </Badge>
+                        
+                        <div className={`text-xs font-medium flex items-center gap-1 ${getMatchScoreColor(applicant.match_score || 75)}`}>
+                          <span>{applicant.match_score || 75}% match</span>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 mt-3">
+                        <Button 
+                          className="w-full neo-button" 
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewCv(applicant.profiles?.resume_url)}
+                        >
+                          View CV
+                        </Button>
+                        <Button 
+                          className="w-full neo-button" 
+                          size="sm"
+                          onClick={() => handleReviewApplication(applicant.id)}
+                        >
+                          Review
+                        </Button>
                       </div>
                     </div>
-
-                    <div className="flex gap-2 mt-3">
-                      <Button 
-                        className="w-full neo-button" 
-                        size="sm"
-                        variant="outline"
-                      >
-                        View CV
-                      </Button>
-                      <Button 
-                        className="w-full neo-button" 
-                        size="sm"
-                      >
-                        Review
-                      </Button>
-                    </div>
+                  ))
+                ) : (
+                  <div className="text-center p-4 text-muted-foreground">
+                    <p>No applications received yet.</p>
+                    <p className="text-sm mt-2">Post jobs to start receiving applications.</p>
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>
@@ -382,7 +490,10 @@ const EmployerDashboard = () => {
             </div>
           </div>
           
-          <Button className="w-full neo-button mt-4">
+          <Button 
+            className="w-full neo-button mt-4"
+            onClick={handleUpgradeToPremium}
+          >
             Upgrade to Premium
           </Button>
         </CardContent>

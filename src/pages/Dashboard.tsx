@@ -5,22 +5,53 @@ import JobSeekerDashboard from "@/components/dashboard/JobSeekerDashboard";
 import EmployerDashboard from "@/components/dashboard/EmployerDashboard";
 import MainLayout from "@/components/layout/MainLayout";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const Dashboard = () => {
   const [userRole, setUserRole] = useState<"job-seeker" | "employer" | null>(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if user is logged in and get role from localStorage
-    const storedRole = localStorage.getItem("userRole") as "job-seeker" | "employer" | null;
+    const checkUserSession = async () => {
+      setLoading(true);
+      
+      // Check if user is logged in
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.error("Please sign in to access the dashboard");
+        navigate('/signin');
+        return;
+      }
+      
+      // Get user role from localStorage or fallback to fetching from database
+      let storedRole = localStorage.getItem("userRole") as "job-seeker" | "employer" | null;
+      
+      if (!storedRole) {
+        // If role not in localStorage, try to fetch from profiles table
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+          
+        if (profile && !error) {
+          storedRole = profile.role as "job-seeker" | "employer";
+          localStorage.setItem("userRole", storedRole);
+        } else {
+          // If we still don't have a role, redirect to role selection
+          toast.error("Please select your role");
+          navigate('/');
+          return;
+        }
+      }
+      
+      setUserRole(storedRole);
+      setLoading(false);
+    };
     
-    if (!storedRole) {
-      toast.error("Please sign in to access the dashboard");
-      navigate('/');
-      return;
-    }
-    
-    setUserRole(storedRole);
+    checkUserSession();
   }, [navigate]);
 
   return (
@@ -28,7 +59,11 @@ const Dashboard = () => {
       <div className="container mx-auto">
         <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
         
-        {userRole === "job-seeker" ? (
+        {loading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : userRole === "job-seeker" ? (
           <JobSeekerDashboard />
         ) : userRole === "employer" ? (
           <EmployerDashboard />
