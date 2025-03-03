@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -38,96 +37,131 @@ const EmployerDashboard = () => {
     interviewsScheduled: 0,
   });
   const [loading, setLoading] = useState(true);
-  
+  const [needsCompany, setNeedsCompany] = useState(false);
+  const [company, setCompany] = useState(null);
+  const [jobs, setJobs] = useState([]);
+  const [statistics, setStatistics] = useState({
+    activeJobs: 0,
+    totalApplications: 0,
+    pendingApplications: 0,
+  });
+
   useEffect(() => {
-    // Check if hints were already shown
-    const hintsShown = localStorage.getItem("hintsShown");
-    setShowHints(!hintsShown);
-    
-    fetchCompanyData();
-  }, []);
-  
-  const fetchCompanyData = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
+    const fetchEmployerData = async () => {
+      setLoading(true);
       
-      if (session) {
-        // Get company ID from profile
-        const { data: profile } = await supabase
+      try {
+        // Get current user
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          toast.error("You must be logged in to view this page");
+          return;
+        }
+        
+        // Get profile data
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('company_id')
+          .select('*')
           .eq('id', session.user.id)
           .single();
-          
-        if (!profile?.company_id) {
-          // Employer doesn't have a company yet
+        
+        if (profileError || !profile) {
+          console.error("Error fetching profile:", profileError);
+          toast.error("Failed to load profile information");
+          return;
+        }
+        
+        // Type assertion for profile data
+        const typedProfile = profile as any;
+        
+        // Check if user has a company
+        if (!typedProfile.company_id) {
+          setNeedsCompany(true);
           setLoading(false);
           return;
         }
         
-        const companyId = profile.company_id;
+        // Fetch company data
+        const { data: company, error: companyError } = await supabase
+          .from('companies')
+          .select('*')
+          .eq('id', typedProfile.company_id)
+          .single();
         
-        // Fetch active jobs
-        const { data: jobs } = await supabase
+        if (companyError || !company) {
+          console.error("Error fetching company:", companyError);
+          toast.error("Failed to load company information");
+          return;
+        }
+        
+        // Fetch jobs
+        const { data: jobs, error: jobsError } = await supabase
           .from('jobs')
           .select('*')
-          .eq('company_id', companyId)
-          .eq('status', 'Active')
+          .eq('company_id', typedProfile.company_id)
           .order('created_at', { ascending: false });
-          
-        setActiveJobs(jobs || []);
         
-        // Fetch recent applicants
-        const { data: applicants } = await supabase
+        if (jobsError) {
+          console.error("Error fetching jobs:", jobsError);
+          toast.error("Failed to load job listings");
+        }
+        
+        // Fetch recent applications
+        const { data: recentApplications, error: applicationsError } = await supabase
           .from('applications')
           .select(`
             *,
-            jobs:job_id(*),
-            profiles:applicant_id(*)
+            job:jobs(*),
+            applicant:profiles(*)
           `)
-          .eq('company_id', companyId)
+          .eq('job.company_id', typedProfile.company_id)
           .order('created_at', { ascending: false })
-          .limit(3);
-          
-        setRecentApplicants(applicants || []);
+          .limit(5);
         
-        // Calculate job stats
-        // Count total applicants across all jobs
-        const { count: totalApplicants } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('company_id', companyId);
-          
-        // Count new applications (received in last 7 days)
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        if (applicationsError) {
+          console.error("Error fetching applications:", applicationsError);
+        }
         
-        const { count: newApplications } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('company_id', companyId)
-          .gte('created_at', oneWeekAgo.toISOString());
+        // Calculate statistics
+        let activeJobs = 0;
+        let totalApplications = 0;
+        let pendingApplications = 0;
+        
+        if (jobs) {
+          activeJobs = jobs.filter(job => (job as any).status === 'active').length;
           
-        // Count interviews scheduled
-        const { count: interviewsScheduled } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('company_id', companyId)
-          .eq('status', 'Interview');
+          // Get all applications for company jobs
+          const { data: allApplications, error: allAppsError } = await supabase
+            .from('applications')
+            .select('id, status, job_id')
+            .in('job_id', jobs.map(job => (job as any).id));
           
-        setJobStats({
-          activeJobs: jobs?.length || 0,
-          totalApplicants: totalApplicants || 0,
-          newApplications: newApplications || 0,
-          interviewsScheduled: interviewsScheduled || 0,
+          if (!allAppsError && allApplications) {
+            totalApplications = allApplications.length;
+            pendingApplications = allApplications.filter(app => (app as any).status === 'pending').length;
+          }
+        }
+        
+        // Set all data to state
+        setCompany(company as any);
+        setJobs(jobs as any[] || []);
+        setRecentApplications(recentApplications as any[] || []);
+        setStatistics({
+          activeJobs,
+          totalApplications,
+          pendingApplications,
         });
+        setLoading(false);
+      } catch (error) {
+        console.error("Error in employer dashboard:", error);
+        toast.error("Something went wrong loading your dashboard");
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching employer data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    
+    fetchEmployerData();
+  }, []);
 
   const handlePostNewJob = () => {
     navigate('/post-job');

@@ -39,13 +39,13 @@ const Pricing = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <PricingFeature included>1 job posting</PricingFeature>
-              <PricingFeature included>Basic applicant tracking</PricingFeature>
-              <PricingFeature included>Email notifications</PricingFeature>
-              <PricingFeature>AI candidate matching</PricingFeature>
-              <PricingFeature>Custom branding</PricingFeature>
-              <PricingFeature>Analytics dashboard</PricingFeature>
-              <PricingFeature>API access</PricingFeature>
+              <PricingFeature included={true}>1 job posting</PricingFeature>
+              <PricingFeature included={true}>Basic applicant tracking</PricingFeature>
+              <PricingFeature included={true}>Email notifications</PricingFeature>
+              <PricingFeature included={false}>AI candidate matching</PricingFeature>
+              <PricingFeature included={false}>Custom branding</PricingFeature>
+              <PricingFeature included={false}>Analytics dashboard</PricingFeature>
+              <PricingFeature included={false}>API access</PricingFeature>
             </CardContent>
             <CardFooter>
               <Button
@@ -72,13 +72,13 @@ const Pricing = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <PricingFeature included>10 job postings</PricingFeature>
-              <PricingFeature included>Advanced applicant tracking</PricingFeature>
-              <PricingFeature included>Email notifications</PricingFeature>
-              <PricingFeature included>AI candidate matching</PricingFeature>
-              <PricingFeature included>Custom branding</PricingFeature>
-              <PricingFeature>Analytics dashboard</PricingFeature>
-              <PricingFeature>API access</PricingFeature>
+              <PricingFeature included={true}>10 job postings</PricingFeature>
+              <PricingFeature included={true}>Advanced applicant tracking</PricingFeature>
+              <PricingFeature included={true}>Email notifications</PricingFeature>
+              <PricingFeature included={true}>AI candidate matching</PricingFeature>
+              <PricingFeature included={true}>Custom branding</PricingFeature>
+              <PricingFeature included={false}>Analytics dashboard</PricingFeature>
+              <PricingFeature included={false}>API access</PricingFeature>
             </CardContent>
             <CardFooter>
               <Button
@@ -101,13 +101,13 @@ const Pricing = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <PricingFeature included>Unlimited job postings</PricingFeature>
-              <PricingFeature included>Advanced applicant tracking</PricingFeature>
-              <PricingFeature included>Email notifications</PricingFeature>
-              <PricingFeature included>AI candidate matching</PricingFeature>
-              <PricingFeature included>Custom branding</PricingFeature>
-              <PricingFeature included>Analytics dashboard</PricingFeature>
-              <PricingFeature included>API access</PricingFeature>
+              <PricingFeature included={true}>Unlimited job postings</PricingFeature>
+              <PricingFeature included={true}>Advanced applicant tracking</PricingFeature>
+              <PricingFeature included={true}>Email notifications</PricingFeature>
+              <PricingFeature included={true}>AI candidate matching</PricingFeature>
+              <PricingFeature included={true}>Custom branding</PricingFeature>
+              <PricingFeature included={true}>Analytics dashboard</PricingFeature>
+              <PricingFeature included={true}>API access</PricingFeature>
             </CardContent>
             <CardFooter>
               <Button

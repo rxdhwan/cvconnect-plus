@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -31,122 +30,132 @@ const JobSeekerDashboard = () => {
   const [showHints, setShowHints] = useState(false);
   const [applications, setApplications] = useState([]);
   const [recommendedJobs, setRecommendedJobs] = useState([]);
-  const [applicationStats, setApplicationStats] = useState({
-    total: 0,
-    pending: 0,
-    interviews: 0,
-    rejected: 0,
-    accepted: 0,
+  const [statistics, setStatistics] = useState({
+    totalApplications: 0,
+    pendingApplications: 0,
+    interviewingApplications: 0,
+    rejectedApplications: 0,
+    offeredApplications: 0,
   });
   const [profileCompletion, setProfileCompletion] = useState(0);
   const [userName, setUserName] = useState("");
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    // Check if hints were already shown
-    const hintsShown = localStorage.getItem("hintsShown");
-    setShowHints(!hintsShown);
-    
-    fetchUserData();
-    fetchApplications();
-    fetchRecommendedJobs();
-  }, []);
-  
-  const fetchUserData = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
+    const fetchJobSeekerData = async () => {
+      setLoading(true);
       
-      if (session) {
-        // Get user profile data
-        const { data, error } = await supabase
+      try {
+        // Get current user
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          toast.error("You must be logged in to view this page");
+          return;
+        }
+        
+        // Get profile data
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
           .single();
-          
-        if (data && !error) {
-          // Set user name from profile
-          const firstName = data.first_name || '';
-          setUserName(firstName);
-          
-          // Calculate profile completion
-          let completionScore = 0;
-          const totalFields = 6; // Example: name, bio, skills, experience, education, resume
-          
-          if (data.first_name) completionScore++;
-          if (data.last_name) completionScore++;
-          if (data.bio) completionScore++;
-          if (data.skills && data.skills.length > 0) completionScore++;
-          if (data.experience && data.experience.length > 0) completionScore++;
-          if (data.resume_url) completionScore++;
-          
-          setProfileCompletion(Math.round((completionScore / totalFields) * 100));
+        
+        if (profileError || !profile) {
+          console.error("Error fetching profile:", profileError);
+          toast.error("Failed to load profile information");
+          return;
         }
-      }
-    } catch (error) {
-      console.error("Error fetching user data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const fetchApplications = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session) {
-        // Get user's applications
-        const { data, error } = await supabase
+        
+        // Type assertion for profile data
+        const typedProfile = profile as any;
+        
+        // Check profile completeness
+        const profileData = {
+          firstName: typedProfile.first_name || '',
+          lastName: typedProfile.last_name || '',
+          bio: typedProfile.bio || '',
+          skills: typedProfile.skills || [],
+          experience: typedProfile.experience || '',
+          resumeUrl: typedProfile.resume_url || '',
+        };
+        
+        const completionPercentage = calculateProfileCompletion(profileData);
+        setProfileCompletion(completionPercentage);
+        
+        // Fetch applications
+        const { data: applications, error: applicationsError } = await supabase
           .from('applications')
           .select(`
             *,
-            jobs:job_id (
-              *,
-              companies:company_id (*)
-            )
+            job:jobs(*, company:companies(*))
           `)
           .eq('applicant_id', session.user.id)
           .order('created_at', { ascending: false });
-          
-        if (!error) {
-          setApplications(data || []);
-          
-          // Calculate application stats
-          const stats = {
-            total: data.length,
-            pending: data.filter(app => app.status === 'New' || app.status === 'Pending').length,
-            interviews: data.filter(app => app.status === 'Interview').length,
-            rejected: data.filter(app => app.status === 'Rejected').length,
-            accepted: data.filter(app => app.status === 'Hired').length,
-          };
-          
-          setApplicationStats(stats);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching applications:", error);
-    }
-  };
-  
-  const fetchRecommendedJobs = async () => {
-    try {
-      // Get recently posted jobs as recommendations (in a real app, this would use more sophisticated matching)
-      const { data, error } = await supabase
-        .from('jobs')
-        .select(`
-          *,
-          companies:company_id (*)
-        `)
-        .eq('status', 'Active')
-        .order('created_at', { ascending: false })
-        .limit(2);
         
-      if (!error) {
-        setRecommendedJobs(data || []);
+        if (applicationsError) {
+          console.error("Error fetching applications:", applicationsError);
+        } else {
+          // Type assertion for application data
+          const typedApplications = applications as any[] || [];
+          setApplications(typedApplications);
+          
+          // Calculate statistics
+          const totalApplications = typedApplications.length;
+          const pendingApplications = typedApplications.filter(app => app.status === 'pending').length;
+          const interviewingApplications = typedApplications.filter(app => app.status === 'interviewing').length;
+          const rejectedApplications = typedApplications.filter(app => app.status === 'rejected').length;
+          const offeredApplications = typedApplications.filter(app => app.status === 'offered').length;
+          
+          setStatistics({
+            totalApplications,
+            pendingApplications,
+            interviewingApplications,
+            rejectedApplications,
+            offeredApplications,
+          });
+        }
+        
+        // Fetch recommended jobs
+        const { data: recommendedJobs, error: jobsError } = await supabase
+          .from('jobs')
+          .select(`
+            *,
+            company:companies(*)
+          `)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        if (jobsError) {
+          console.error("Error fetching recommended jobs:", jobsError);
+        } else {
+          setRecommendedJobs(recommendedJobs as any[] || []);
+        }
+        
+        setLoading(false);
+      } catch (error) {
+        console.error("Error in job seeker dashboard:", error);
+        toast.error("Something went wrong loading your dashboard");
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching recommended jobs:", error);
-    }
+    };
+    
+    fetchJobSeekerData();
+  }, []);
+  
+  const calculateProfileCompletion = (profileData) => {
+    const totalFields = 6; // Example: name, bio, skills, experience, education, resume
+    let completionScore = 0;
+    
+    if (profileData.firstName) completionScore++;
+    if (profileData.lastName) completionScore++;
+    if (profileData.bio) completionScore++;
+    if (profileData.skills && profileData.skills.length > 0) completionScore++;
+    if (profileData.experience && profileData.experience.length > 0) completionScore++;
+    if (profileData.resumeUrl) completionScore++;
+    
+    return Math.round((completionScore / totalFields) * 100);
   };
 
   const handleApplyNow = (jobId) => {
@@ -236,7 +245,7 @@ const JobSeekerDashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm">Total Applications</p>
-                <p className="text-3xl font-bold mt-1">{applicationStats.total}</p>
+                <p className="text-3xl font-bold mt-1">{statistics.totalApplications}</p>
               </div>
               <div className="p-3 rounded-full bg-primary/10">
                 <Briefcase className="h-5 w-5 text-primary" />
@@ -250,7 +259,7 @@ const JobSeekerDashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm">Pending Review</p>
-                <p className="text-3xl font-bold mt-1">{applicationStats.pending}</p>
+                <p className="text-3xl font-bold mt-1">{statistics.pendingApplications}</p>
               </div>
               <div className="p-3 rounded-full bg-yellow-500/10">
                 <Clock className="h-5 w-5 text-yellow-500" />
@@ -264,7 +273,7 @@ const JobSeekerDashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm">Interviews</p>
-                <p className="text-3xl font-bold mt-1">{applicationStats.interviews}</p>
+                <p className="text-3xl font-bold mt-1">{statistics.interviewingApplications}</p>
               </div>
               <div className="p-3 rounded-full bg-blue-500/10">
                 <BarChart3 className="h-5 w-5 text-blue-500" />
@@ -317,10 +326,10 @@ const JobSeekerDashboard = () => {
                     >
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-md overflow-hidden flex-shrink-0 bg-muted flex items-center justify-center">
-                          {application.jobs?.companies?.logo_url ? (
+                          {application.job?.company?.logo_url ? (
                             <img 
-                              src={application.jobs.companies.logo_url} 
-                              alt={application.jobs.companies.name} 
+                              src={application.job.company.logo_url} 
+                              alt={application.job.company.name} 
                               className="w-full h-full object-cover" 
                             />
                           ) : (
@@ -328,9 +337,9 @@ const JobSeekerDashboard = () => {
                           )}
                         </div>
                         <div>
-                          <h4 className="font-medium">{application.jobs?.title || "Job Title"}</h4>
+                          <h4 className="font-medium">{application.job.title || "Job Title"}</h4>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span>{application.jobs?.companies?.name || "Company"}</span>
+                            <span>{application.job.company.name || "Company"}</span>
                             <span className="text-xs">•</span>
                             <span>Applied {new Date(application.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                           </div>
@@ -399,10 +408,10 @@ const JobSeekerDashboard = () => {
                     >
                       <div className="flex items-center gap-3 mb-3">
                         <div className="w-10 h-10 rounded-md overflow-hidden flex-shrink-0 bg-muted flex items-center justify-center">
-                          {job.companies?.logo_url ? (
+                          {job.company?.logo_url ? (
                             <img 
-                              src={job.companies.logo_url} 
-                              alt={job.companies.name} 
+                              src={job.company.logo_url} 
+                              alt={job.company.name} 
                               className="w-full h-full object-cover" 
                             />
                           ) : (
@@ -411,7 +420,7 @@ const JobSeekerDashboard = () => {
                         </div>
                         <div>
                           <h4 className="font-medium">{job.title}</h4>
-                          <p className="text-sm text-muted-foreground">{job.companies?.name || "Company"}</p>
+                          <p className="text-sm text-muted-foreground">{job.company?.name || "Company"}</p>
                         </div>
                       </div>
                       

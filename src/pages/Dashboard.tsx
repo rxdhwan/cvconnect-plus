@@ -33,7 +33,8 @@ const Dashboard = () => {
         .single();
           
       if (profile && !error) {
-        const userRole = profile.role as "job-seeker" | "employer";
+        // Type assertion to handle the type issue
+        const userRole = (profile.role as any) as "job-seeker" | "employer";
         setUserRole(userRole);
         localStorage.setItem("userRole", userRole);
       } else {
