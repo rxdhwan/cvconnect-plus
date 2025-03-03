@@ -27,9 +27,8 @@ const RoleSelection = ({ onRoleSelect, onCancel }: RoleSelectionProps) => {
     if (onRoleSelect) {
       onRoleSelect(selectedRole);
     } else {
-      localStorage.setItem("userRole", selectedRole);
-      toast.success(`Welcome! You're now signed in as a ${selectedRole === "job-seeker" ? "Job Seeker" : "Employer"}`);
-      navigate("/dashboard");
+      // Navigate to signup page with selected role
+      navigate("/signup", { state: { role: selectedRole } });
     }
   };
 
@@ -37,7 +36,7 @@ const RoleSelection = ({ onRoleSelect, onCancel }: RoleSelectionProps) => {
     <div className="flex flex-col items-center justify-center max-w-md mx-auto py-10 px-4 animate-fade-in">
       <h2 className="text-2xl font-bold mb-2">Choose your role</h2>
       <p className="text-muted-foreground text-center mb-8">
-        Select how you'll be using CryptoJobs
+        Select how you'll be using CVConnect+
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">

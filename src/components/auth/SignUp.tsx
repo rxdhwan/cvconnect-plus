@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface SignUpProps {
   role: "job-seeker" | "employer";
@@ -15,13 +16,14 @@ const SignUp = ({ role }: SignUpProps) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !password || !confirmPassword || !name) {
+    if (!email || !password || !confirmPassword || !firstName || !lastName) {
       toast.error("Please fill in all fields");
       return;
     }
@@ -31,20 +33,42 @@ const SignUp = ({ role }: SignUpProps) => {
       return;
     }
     
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    
     setIsLoading(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Register user with Supabase
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            role: role
+          }
+        }
+      });
       
-      // Store user role in localStorage
-      localStorage.setItem("userRole", role);
-      
-      toast.success("Account created successfully!");
-      navigate("/dashboard");
+      if (error) {
+        toast.error(error.message);
+      } else {
+        // Store user role in localStorage for immediate use
+        localStorage.setItem("userRole", role);
+        
+        toast.success("Account created successfully!");
+        toast.info("Check your email to confirm your account");
+        
+        // Navigate to dashboard
+        navigate("/dashboard");
+      }
     } catch (error) {
+      console.error("Registration error:", error);
       toast.error("Something went wrong. Please try again.");
-      console.error(error);
     } finally {
       setIsLoading(false);
     }
@@ -52,15 +76,28 @@ const SignUp = ({ role }: SignUpProps) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="name">Full Name</Label>
-        <Input
-          id="name"
-          placeholder="Enter your full name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="firstName">First Name</Label>
+          <Input
+            id="firstName"
+            placeholder="Enter your first name"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            required
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="lastName">Last Name</Label>
+          <Input
+            id="lastName"
+            placeholder="Enter your last name"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            required
+          />
+        </div>
       </div>
       
       <div className="space-y-2">

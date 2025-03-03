@@ -3,7 +3,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Jobs from "./pages/Jobs";
@@ -19,8 +21,48 @@ import CompanyJobs from "./pages/CompanyJobs";
 import CompanyApplicants from "./pages/CompanyApplicants";
 import ApplicationReview from "./pages/ApplicationReview";
 import Pricing from "./pages/Pricing";
+import RoleSelection from "./components/onboarding/RoleSelection";
 
 const queryClient = new QueryClient();
+
+// Protected route component
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const [loading, setLoading] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      setAuthenticated(!!data.session);
+      setLoading(false);
+    };
+
+    checkAuth();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setAuthenticated(!!session);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin h-10 w-10 border-4 border-primary border-r-transparent rounded-full"></div>
+    </div>;
+  }
+
+  if (!authenticated) {
+    return <Navigate to="/signin" replace />;
+  }
+
+  return <>{children}</>;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -32,17 +74,53 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/jobs" element={<Jobs />} />
           <Route path="/job/:id" element={<JobDetail />} />
-          <Route path="/job/:id/manage" element={<ManageJob />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/applications" element={<Applications />} />
-          <Route path="/application/:id" element={<ApplicationReview />} />
-          <Route path="/post-job" element={<PostJob />} />
-          <Route path="/company/jobs" element={<CompanyJobs />} />
-          <Route path="/company/applicants" element={<CompanyApplicants />} />
+          <Route path="/select-role" element={<RoleSelection />} />
+          
+          {/* Protected routes */}
+          <Route path="/job/:id/manage" element={
+            <ProtectedRoute>
+              <ManageJob />
+            </ProtectedRoute>
+          } />
+          <Route path="/profile" element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          } />
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/applications" element={
+            <ProtectedRoute>
+              <Applications />
+            </ProtectedRoute>
+          } />
+          <Route path="/application/:id" element={
+            <ProtectedRoute>
+              <ApplicationReview />
+            </ProtectedRoute>
+          } />
+          <Route path="/post-job" element={
+            <ProtectedRoute>
+              <PostJob />
+            </ProtectedRoute>
+          } />
+          <Route path="/company/jobs" element={
+            <ProtectedRoute>
+              <CompanyJobs />
+            </ProtectedRoute>
+          } />
+          <Route path="/company/applicants" element={
+            <ProtectedRoute>
+              <CompanyApplicants />
+            </ProtectedRoute>
+          } />
           <Route path="/pricing" element={<Pricing />} />
+          
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

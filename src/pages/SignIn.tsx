@@ -1,16 +1,9 @@
 
-import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
 import SignIn from "@/components/auth/SignIn";
 
 const SignInPage = () => {
-  const navigate = useNavigate();
-
   return (
     <div className="min-h-screen flex flex-col">
       <header className="w-full py-4 px-6 border-b">
@@ -27,17 +20,7 @@ const SignInPage = () => {
               Enter your credentials to access your account
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <SignIn />
-          </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
-            <div className="text-sm text-center text-muted-foreground">
-              Don't have an account?{" "}
-              <Link to="/" className="text-primary font-medium hover:underline">
-                Sign up
-              </Link>
-            </div>
-          </CardFooter>
+          <SignIn />
         </Card>
       </main>
 
