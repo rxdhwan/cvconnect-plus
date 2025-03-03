@@ -9,8 +9,7 @@ import {
   DollarSign, 
   Users, 
   Heart,
-  Bitcoin, 
-  Ethereum 
+  Bitcoin
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,6 +31,25 @@ interface JobCardProps {
   compact?: boolean;
 }
 
+// Custom Ethereum icon component
+const EthereumIcon = () => (
+  <svg 
+    width="16" 
+    height="16" 
+    viewBox="0 0 256 417" 
+    xmlns="http://www.w3.org/2000/svg"
+    className="text-crypto-ethereum"
+    style={{ fill: 'currentColor' }}
+  >
+    <path d="M127.9611 0.0368728L125.1661 9.5877V285.168L127.9611 288.002L255.9231 212.176L127.9611 0.0368728Z" />
+    <path d="M127.962 0.0368728L0 212.176L127.962 288.002V154.258V0.0368728Z" />
+    <path d="M127.9609 312.1866L126.3859 314.1056V413.3056L127.9609 416.9066L255.9999 236.5866L127.9609 312.1866Z" />
+    <path d="M127.962 416.9052V312.1852L0 236.5852L127.962 416.9052Z" />
+    <path d="M127.9609 288.0012L255.9229 212.1762L127.9609 154.2592V288.0012Z" />
+    <path d="M0.000976562 212.176L127.963 288.001V154.259L0.000976562 212.176Z" />
+  </svg>
+);
+
 const SolanaIcon = () => (
   <svg 
     width="16" 
@@ -47,7 +65,7 @@ const SolanaIcon = () => (
 const getCryptoIcon = (tag: string) => {
   const lowerTag = tag.toLowerCase();
   if (lowerTag.includes("bitcoin")) return <Bitcoin size={16} className="text-crypto-bitcoin" />;
-  if (lowerTag.includes("ethereum")) return <Ethereum size={16} className="text-crypto-ethereum" />;
+  if (lowerTag.includes("ethereum")) return <EthereumIcon />;
   if (lowerTag.includes("solana")) return <SolanaIcon />;
   return null;
 };

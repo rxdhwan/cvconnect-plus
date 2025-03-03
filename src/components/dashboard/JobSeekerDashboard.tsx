@@ -18,7 +18,8 @@ import {
   CheckCircle,
   XCircle,
   ChevronRight,
-  ArrowUpRight
+  ArrowUpRight,
+  User
 } from "lucide-react";
 import Hints from "../onboarding/Hints";
 
